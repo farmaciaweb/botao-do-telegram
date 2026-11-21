@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Farmacia Web</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #f8fafc; }
+    header { background: #1e293b; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 20; border-bottom: 1px solid #334155; }
+    .brand { font-size: 18px; font-weight: bold; color: #38bdf8; }
+    .cart-btn { background: #22c55e; color: #052e16; border: none; padding: 9px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .container { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .search-input { flex: 1; min-width: 200px; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: #fff; }
+    .cat-btn { padding: 9px 12px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: #e2e8f0; cursor: pointer; font-weight: bold; }
+    .cat-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+    .tag { display: inline-block; background: #0284c7; color: #fff; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 999px; margin-bottom: 6px; }
+    .title { font-size: 16px; font-weight: bold; margin: 0 0 4px; }
+    .desc { font-size: 13px; color: #94a3b8; margin: 0 0 8px; }
+    .price { font-size: 18px; font-weight: bold; color: #4ade80; }
+    .old-price { font-size: 12px; color: #94a3b8; text-decoration: line-through; margin-left: 6px; }
+    .add-btn { width: 100%; background: #38bdf8; color: #0f172a; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-top: 22px; }
+    .cart-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #334155; font-size: 14px; }
+    .qty-box { display: flex; align-items: center; gap: 6px; }
+    .qty-btn { background: #334155; color: #fff; border: none; width: 26px; height: 26px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .full { grid-column: 1 / -1; }
+    input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; }
+    .submit-btn { width: 100%; margin-top: 14px; background: #22c55e; color: #052e16; border: none; padding: 13px; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .msg { margin-top: 10px; font-size: 14px; color: #fde047; }
+    .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #0284c7; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: bold; display: none; z-index: 50; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">FARMACIA WEB</div>
+    <button class="cart-btn" onclick="scrollToCart()">Carrinho (<span id="cartCount">0</span>)</button>
+  </header>
+
+  <div class="container">
+    <div class="controls">
+      <input id="searchInput" class="search-input" type="text" placeholder="Buscar produto..." oninput="renderProducts()" />
+      <button class="cat-btn active" data-cat="all" onclick="setCat('all', this)">Todos</button>
+      <button class="cat-btn" data-cat="emagrecimento" onclick="setCat('emagrecimento', this)">Emagrecimento</button>
+      <button class="cat-btn" data-cat="vip" onclick="setCat('vip', this)">VIP</button>
+      <button class="cat-btn" data-cat="hormonios" onclick="setCat('hormonios', this)">Hormônios</button>
+      <button class="cat-btn" data-cat="tarja" onclick="setCat('tarja', this)">Tarja</button>
+    </div>
+
+    <div id="productsGrid" class="grid">Carregando produtos...</div>
+
+    <div id="cartPanel" class="panel">
+      <h2 style="margin-top:0;">Seu Carrinho</h2>
+      <div id="cartItems">Carrinho vazio.</div>
+      <div style="margin-top:12px; font-size:18px; font-weight:bold;">
+        Total: R$ <span id="cartTotal">0,00</span>
+      </div>
+
+      <form id="checkoutForm" class="form-grid">
+        <input id="customerName" class="full" type="text" placeholder="Nome completo" required />
+        <input id="customerPhone" type="tel" placeholder="Telefone / WhatsApp" required />
+        <input id="customerEmail" type="email" placeholder="E-mail" />
+        <input id="customerCep" type="text" placeholder="CEP" required />
+        <input id="customerAddress" class="full" type="text" placeholder="Rua / Avenida" required />
+        <input id="customerNumber" type="text" placeholder="Número" required />
+        <input id="customerComplement" type="text" placeholder="Complemento / Bairro" required />
+        <button id="placeOrderBtn" class="submit-btn full" type="submit">CHAMAR NO TELEGRAM</button>
+      </form>
+      <div id="checkoutMessage" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const SUPABASE_URL = "https://vqbfhrvqoukgldcrqblw.supabase.co";
+    const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
+    const TELEGRAM_LINK_BASE = "https://t.me/farmaciaweb_oficial";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let products = [];
+    let activeCat = "all";
+    let cart = JSON.parse(localStorage.getItem("farmacia_cart") || "[]");
+
+    function toast(text) {
+      const el = document.getElementById("toast");
+      el.textContent = text;
+      el.style.display = "block";
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => { el.style.display = "none"; }, 2400);
+    }
+
+    function fmtMoney(val) {
+      return Number(val || 0).toFixed(2).replace(".", ",");
+    }
+
+    function saveCart() {
+      localStorage.setItem("farmacia_cart", JSON.stringify(cart));
+      updateCartBadge();
+    }
+
+    function updateCartBadge() {
+      const totalQty = cart.reduce((acc, item) => acc + Number(item.qty || 0), 0);
+      document.getElementById("cartCount").textContent = totalQty;
+    }
+
+    function scrollToCart() {
+      document.getElementById("cartPanel").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function setCat(cat, btn) {
+      activeCat = cat;
+      document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      renderProducts();
+    }
+
+    async function loadProducts() {
+      const grid = document.getElementById("productsGrid");
+      try {
+        const { data, error } = await db
+          .from("products")
+          .select("*")
+          .eq("active", true)
+          .order("id", { ascending: true });
+        if (error) throw error;
+        products = data || [];
+        renderProducts();
+      } catch (err) {
+        console.error(err);
+        grid.innerHTML = "<p>Não foi possível carregar os produtos agora.</p>";
+      }
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById("productsGrid");
+      const q = (document.getElementById("searchInput").value || "").toLowerCase().trim();
+      const filtered = products.filter(p => {
+        const matchCat = activeCat === "all" || p.category === activeCat;
+        const matchText = !q || (p.name || "").toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q);
+        return matchCat && matchText;
+      });
+      if (!filtered.length) {
+        grid.innerHTML = "<p>Nenhum produto encontrado.</p>";
+        return;
+      }
+      grid.innerHTML = filtered.map(p => `
+        <div class="card">
+          <div>
+            ${p.tag ? `<span class="tag">${p.tag}</span>` : ""}
+            <h3 class="title">${p.name}</h3>
+            <p class="desc">${p.description || ""}</p>
+          </div>
+          <div>
+            <div style="margin-bottom:10px;">
+              <span class="price">R$ ${fmtMoney(p.price)}</span>
+              ${Number(p.old_price) > Number(p.price) ? `<span class="old-price">R$ ${fmtMoney(p.old_price)}</span>` : ""}
+            </div>
+            <button class="add-btn" onclick="addToCart(${p.id})">Adicionar ao carrinho</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function addToCart(id) {
+      const prod = products.find(p => Number(p.id) === Number(id));
+      if (!prod) return;
+      const found = cart.find(i => Number(i.id) === Number(id));
+      if (found) found.qty += 1;
+      else cart.push({ id: prod.id, name: prod.name, price: Number(prod.price), qty: 1 });
+      saveCart();
+      renderCart();
+      toast(prod.name + " adicionado!");
+    }
+
+    function changeQty(id, delta) {
+      const idx = cart.findIndex(i => Number(i.id) === Number(id));
+      if (idx === -1) return;
+      cart[idx].qty += delta;
+      if (cart[idx].qty <= 0) cart.splice(idx, 1);
+      saveCart();
+      renderCart();
+    }
+
+    function renderCart() {
+      const box = document.getElementById("cartItems");
+      const totalEl = document.getElementById("cartTotal");
+      if (!cart.length) {
+        box.innerHTML = "Carrinho vazio.";
+        totalEl.textContent = "0,00";
+        updateCartBadge();
+        return;
+      }
+      let total = 0;
+      box.innerHTML = cart.map(item => {
+        const currentProd = products.find(p => Number(p.id) === Number(item.id));
+        const unitPrice = currentProd ? Number(currentProd.price) : Number(item.price);
+        const subtotal = unitPrice * Number(item.qty);
+        total += subtotal;
+        return `
+          <div class="cart-item">
+            <div>
+              <strong>${item.name}</strong><br/>
+              <small>R$ ${fmtMoney(unitPrice)} cada — Subtotal: R$ ${fmtMoney(subtotal)}</small>
+            </div>
+            <div class="qty-box">
+              <button class="qty-btn" type="button" onclick="changeQty(${item.id}, -1)">-</button>
+              <span>${item.qty}</span>
+              <button class="qty-btn" type="button" onclick="changeQty(${item.id}, 1)">+</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      totalEl.textContent = fmtMoney(total);
+      updateCartBadge();
+    }
+
+    function buildTelegramMessage(customer, itemsDetail, total, orderId) {
+      const lines = [
+        "Olá Farmacia Web, quero fazer este pedido:",
+        orderId ? `Pedido: #${orderId}` : "",
+        "",
+        "Produtos:",
+        ...itemsDetail.map(i => `- ${i.qty}x ${i.name} (R$ ${fmtMoney(i.price * i.qty)})`),
+        `Total: R$ ${fmtMoney(total)}`,
+        "",
+        "Meus dados:",
+        `Nome: ${customer.name}`,
+        `Telefone: ${customer.phone}`,
+        customer.email ? `E-mail: ${customer.email}` : "",
+        "",
+        "Endereço:",
+        `Rua: ${customer.address}, Nº ${customer.number}`,
+        `Complemento/Bairro: ${customer.complement}`,
+        `CEP: ${customer.cep}`
+      ].filter(Boolean);
+      return lines.join("\n");
+    }
+
+    document.getElementById("checkoutForm").onsubmit = async e => {
+      e.preventDefault();
+      const btn = document.getElementById("placeOrderBtn");
+      btn.disabled = true;
+      btn.textContent = "ABRINDO TELEGRAM...";
+      try {
+        if (!cart.length) throw new Error("Seu carrinho está vazio.");
+        const baseLink = TELEGRAM_LINK_BASE.replace(/\/+$/, "").trim();
+        const customer = {
+          name: document.getElementById("customerName").value.trim(),
+          phone: document.getElementById("customerPhone").value.trim(),
+          email: document.getElementById("customerEmail").value.trim(),
+          cep: document.getElementById("customerCep").value.trim(),
+          address: document.getElementById("customerAddress").value.trim(),
+          number: document.getElementById("customerNumber").value.trim(),
+          complement: document.getElementById("customerComplement").value.trim()
+        };
+        const itemsDetail = cart.map(item => {
+          const prod = products.find(p => Number(p.id) === Number(item.id));
+          return {
+            product_id: item.id,
+            name: prod ? prod.name : item.name,
+            price: prod ? Number(prod.price) : Number(item.price),
+            qty: Number(item.qty)
+          };
+        });
+        const total = itemsDetail.reduce((sum, i) => sum + i.price * i.qty, 0);
+
+        let orderId = "";
+        const { data: order, error } = await db
+          .from("orders")
+          .insert({
+            customer_name: customer.name,
+            customer_email: customer.email,
+            customer_phone: customer.phone,
+            shipping_cep: customer.cep,
+            shipping_address: customer.address,
+            shipping_number: customer.number,
+            shipping_complement: customer.complement,
+            items: itemsDetail.map(i => ({ product_id: i.product_id, quantity: i.qty })),
+            total,
+            status: "telegram_checkout"
+          })
+          .select("id")
+          .single();
+        if (!error && order && order.id) orderId = order.id;
+
+        const msg = buildTelegramMessage(customer, itemsDetail, total, orderId);
+        const sep = baseLink.includes("?") ? "&" : "?";
+        const tgUrl = `${baseLink}${sep}text=${encodeURIComponent(msg)}`;
+
+        cart = [];
+        saveCart();
+        renderCart();
+        document.getElementById("checkoutMessage").textContent = "Redirecionando para o Telegram...";
+        window.location.href = tgUrl;
+      } catch (err) {
+        console.error(err);
+        toast("Erro: " + (err.message || "não foi possível finalizar"));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "CHAMAR NO TELEGRAM";
+      }
+    };
+
+    loadProducts();
+    renderCart();
+  </script>
+</body>
+</html>
